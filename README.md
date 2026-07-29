@@ -33,7 +33,7 @@ This project implements the **Serial Peripheral Interface (SPI) Bus Protocol** a
 
 ## Future Enhancements
 
-* Support for all four SPI modes (CPOL/CPHA)
+* Support for MODE 0 only
 * Configurable clock divider
 * Error logging and diagnostic reporting
 * Multiple slave support
