@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SPI + BIST — Full Pin-Level Schematic</title>
+<style>
+  body { background:#1b1b1a; color:#e8e6df; font-family:Arial,sans-serif; margin:0; padding:20px; }
+  h1 { font-size:18px; font-weight:500; margin:0 0 4px; }
+  p.sub { font-size:13px; color:#a3a199; margin:0 0 20px; }
+  .legend { display:flex; gap:20px; margin-bottom:16px; font-size:12px; color:#c2c0b6; }
+  .legend span.sw { display:inline-block; width:14px; height:3px; margin-right:5px; vertical-align:middle; }
+  #canvas-wrap { overflow:auto; border:1px solid #3a3a37; border-radius:6px; background:#141413; }
+  #canvas { position:relative; }
+  .mod { position:absolute; background:#22221f; border:1px solid #4a4a45; border-radius:6px; }
+  .mod .hdr { background:#2e2e2a; border-bottom:1px solid #4a4a45; padding:6px 10px; font-size:13px; font-weight:500; color:#f0efe8; border-radius:6px 6px 0 0; }
+  .mod .body { display:flex; }
+  .col { flex:1; padding:4px 0; }
+  .col.in { border-right:1px solid #33332f; }
+  .pin { font-size:11px; padding:2px 8px; white-space:nowrap; display:flex; align-items:center; height:18px; }
+  .col.in .pin { justify-content:flex-start; color:#9fe1cb; }
+  .col.out .pin { justify-content:flex-end; color:#f2b866; }
+  .pin .w { color:#77756d; margin-left:4px; font-size:10px; }
+  .marker { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  .col.in .marker { background:#5dcaa5; margin-right:5px; }
+  .col.out .marker { background:#ef9f27; margin-left:5px; }
+  .ext { background:#26261f; border:1px dashed #5a5a52; border-radius:6px; }
+  .ext .hdr { background:transparent; border-bottom:none; color:#c9c7bc; }
+  .node-small { background:#2a2a26; border:1px solid #55524a; border-radius:5px; font-size:10px; color:#d9d7cc; display:flex; align-items:center; justify-content:center; text-align:center; padding:2px; }
+  svg#wires { position:absolute; top:0; left:0; pointer-events:none; }
+</style>
+</head>
+<body>
+
+<h1>SPI + BIST — full pin-level interconnect schematic</h1>
+<p class="sub">Every module, every pin, wired exactly as instantiated in spi_bist_top.v. Scroll / zoom (Ctrl+scroll or browser zoom) to read.</p>
+<div class="legend">
+  <span><span class="sw" style="background:#5dcaa5"></span>input pin (green)</span>
+  <span><span class="sw" style="background:#ef9f27"></span>output pin (orange)</span>
+  <span><span class="sw" style="background:#ef9f27;opacity:.5"></span>wire (colored by driving/source pin)</span>
+</div>
+<div id="canvas-wrap">
+  <div id="canvas"></div>
+</div>
+
+<script>
+// ============================================================
+// MODULE DEFINITIONS — position (x,y), width, input pins, output pins
+// Every pin here matches the verified RTL exactly.
+// ============================================================
+const PIN_H = 18;
+const HDR_H = 26;
+
+function boxHeight(mod) {
+  const rows = Math.max(mod.inputs.length, mod.outputs.length);
+  return HDR_H + rows * PIN_H + 8;
+}
+
+const modules = {
+  EXT_HOST: { x: 20, y: 260, w: 190, ext:true, title:"Host / CPU (external)",
+    inputs: [], outputs: [
+      {id:"wr_en",n:"wr_en",w:"1"},{id:"wr_addr",n:"wr_addr",w:"4"},{id:"wr_data",n:"wr_data",w:"16"},
+      {id:"rd_addr",n:"rd_addr",w:"4"},{id:"clk",n:"clk",w:"1"},{id:"rst_n",n:"rst_n",w:"1"}
+    ]},
+  EXT_PADS: { x: 2540, y: 320, w: 190, ext:true, title:"External SPI pins",
+    inputs: [{id:"spi_miso",n:"spi_miso",w:"1"}],
+    outputs: [] },
+  EXT_OUT: { x: 2540, y: 40, w: 190, ext:true, title:"Host read-back / debug",
+    inputs: [{id:"rd_data",n:"rd_data",w:"16"},{id:"bist_pass_pulse",n:"bist_pass_pulse",w:"1"},{id:"bist_fail_pulse",n:"bist_fail_pulse",w:"1"},
+             {id:"spi_sclk",n:"spi_sclk",w:"1"},{id:"spi_mosi",n:"spi_mosi",w:"1"},{id:"spi_ss_n",n:"spi_ss_n",w:"1"}],
+    outputs: [] },
+
+  REGFILE: { x: 320, y: 20, w: 260, title:"spi_regfile.v",
+    inputs: [
+      {id:"clk",n:"clk",w:"1"},{id:"rst_n",n:"rst_n",w:"1"},
+      {id:"wr_en",n:"wr_en",w:"1"},{id:"wr_addr",n:"wr_addr",w:"4"},{id:"wr_data",n:"wr_data",w:"16"},{id:"rd_addr",n:"rd_addr",w:"4"},
+      {id:"rx_data_in",n:"rx_data_in",w:"8"},{id:"busy_in",n:"busy_in",w:"1"},{id:"done_in",n:"done_in",w:"1"},
+      {id:"bist_pass_in",n:"bist_pass_in",w:"1"},{id:"bist_fail_in",n:"bist_fail_in",w:"1"},
+      {id:"bist_sig_act_in",n:"bist_sig_act_in",w:"8"},{id:"err_code_in",n:"err_code_in",w:"4"}
+    ],
+    outputs: [
+      {id:"rd_data",n:"rd_data",w:"16"},{id:"spi_en_out",n:"spi_en_out",w:"1"},
+      {id:"cpol",n:"cpol",w:"1"},{id:"cpha",n:"cpha",w:"1"},{id:"clk_div",n:"clk_div",w:"8"},{id:"tx_data",n:"tx_data",w:"8"},
+      {id:"bist_en",n:"bist_en",w:"1"},{id:"bist_start_out",n:"bist_start_out",w:"1"},
+      {id:"bist_mode",n:"bist_mode",w:"2"},{id:"bist_sig_exp",n:"bist_sig_exp",w:"8"}
+    ]},
+
+  MASTER: { x: 900, y: 20, w: 220, title:"spi_master.v",
+    inputs: [
+      {id:"clk",n:"clk",w:"1"},{id:"rst_n",n:"rst_n",w:"1"},{id:"spi_en",n:"spi_en",w:"1"},
+      {id:"cpol",n:"cpol",w:"1"},{id:"cpha",n:"cpha",w:"1"},{id:"clk_div",n:"clk_div",w:"8"},
+      {id:"tx_data",n:"tx_data",w:"8"},{id:"miso",n:"miso",w:"1"}
+    ],
+    outputs: [
+      {id:"rx_data",n:"rx_data",w:"8"},{id:"busy",n:"busy",w:"1"},{id:"done",n:"done",w:"1"},
+      {id:"sclk",n:"sclk",w:"1"},{id:"mosi",n:"mosi",w:"1"},{id:"ss_n",n:"ss_n",w:"1"}
+    ]},
+
+  MUX: { x: 1440, y: 260, w: 220, title:"loopback_mux.v",
+    inputs: [
+      {id:"loopback_en",n:"loopback_en",w:"1"},{id:"m_sclk",n:"m_sclk",w:"1"},{id:"m_mosi",n:"m_mosi",w:"1"},{id:"m_ss_n",n:"m_ss_n",w:"1"},
+      {id:"ext_miso",n:"ext_miso",w:"1"},{id:"slv_miso",n:"slv_miso",w:"1"}
+    ],
+    outputs: [
+      {id:"m_miso",n:"m_miso",w:"1"},{id:"ext_sclk",n:"ext_sclk",w:"1"},{id:"ext_mosi",n:"ext_mosi",w:"1"},{id:"ext_ss_n",n:"ext_ss_n",w:"1"},
+      {id:"slv_sclk",n:"slv_sclk",w:"1"},{id:"slv_mosi",n:"slv_mosi",w:"1"},{id:"slv_ss_n",n:"slv_ss_n",w:"1"}
+    ]},
+
+  SLAVE: { x: 1980, y: 300, w: 220, title:"spi_slave.v",
+    inputs: [
+      {id:"clk",n:"clk",w:"1"},{id:"rst_n",n:"rst_n",w:"1"},{id:"cpol",n:"cpol",w:"1"},{id:"cpha",n:"cpha",w:"1"},
+      {id:"sclk_in",n:"sclk_in",w:"1"},{id:"mosi",n:"mosi",w:"1"},{id:"ss_n_in",n:"ss_n_in",w:"1"},{id:"tx_data",n:"tx_data",w:"8"}
+    ],
+    outputs: [
+      {id:"miso",n:"miso",w:"1"},{id:"rx_data",n:"rx_data",w:"8"},{id:"rx_done",n:"rx_done",w:"1"}
+    ]},
+
+  BIST: { x: 900, y: 620, w: 260, title:"bist_ctrl.v",
+    inputs: [
+      {id:"clk",n:"clk",w:"1"},{id:"rst_n",n:"rst_n",w:"1"},{id:"bist_start",n:"bist_start",w:"1"},
+      {id:"bist_mode",n:"bist_mode",w:"2"},{id:"bist_sig_exp",n:"bist_sig_exp",w:"8"},
+      {id:"spi_done",n:"spi_done",w:"1"},{id:"rx_data",n:"rx_data",w:"8"},
+      {id:"lfsr_data",n:"lfsr_data",w:"8"},{id:"misr_sig",n:"misr_sig",w:"8"}
+    ],
+    outputs: [
+      {id:"bist_pass",n:"bist_pass",w:"1"},{id:"bist_fail",n:"bist_fail",w:"1"},{id:"bist_busy",n:"bist_busy",w:"1"},{id:"err_code",n:"err_code",w:"4"},
+      {id:"spi_en",n:"spi_en",w:"1"},{id:"bist_tx",n:"bist_tx",w:"8"},
+      {id:"lfsr_seed_load",n:"lfsr_seed_load",w:"1"},{id:"lfsr_en",n:"lfsr_en",w:"1"},
+      {id:"misr_en",n:"misr_en",w:"1"},{id:"misr_rst",n:"misr_rst",w:"1"},{id:"loopback_en",n:"loopback_en",w:"1"}
+    ]},
+
+  LFSR: { x: 500, y: 700, w: 200, title:"lfsr.v",
+    inputs: [{id:"clk",n:"clk",w:"1"},{id:"rst_n",n:"rst_n",w:"1"},{id:"seed_load",n:"seed_load",w:"1"},{id:"seed_in",n:"seed_in",w:"8"},{id:"en",n:"en",w:"1"}],
+    outputs: [{id:"lfsr_data",n:"lfsr_data",w:"8"}]},
+
+  MISR: { x: 1280, y: 700, w: 200, title:"misr.v",
+    inputs: [{id:"clk",n:"clk",w:"1"},{id:"rst_n",n:"rst_n",w:"1"},{id:"misr_rst",n:"misr_rst",w:"1"},{id:"misr_en",n:"misr_en",w:"1"},{id:"data_in",n:"data_in",w:"8"}],
+    outputs: [{id:"sig_out",n:"sig_out",w:"8"}]}
+};
+
+const smallNodes = {
+  MUX1: { x: 700, y: 60, w: 130, h: 44, label:"spi_en select\n(host / BIST)" },
+  MUX2: { x: 700, y: 130, w: 130, h: 44, label:"tx_data select\n(host / BIST)" },
+  AND1: { x: 700, y: 320, w: 130, h: 44, label:"AND gate\nbist_start qualify" }
+};
+
+// ============================================================
+// CONNECTIONS — [from "MODULE.pin", to "MODULE.pin"]
+// One entry per wire segment (fan-outs = multiple entries from same source)
+// ============================================================
+const conns = [
+  ["EXT_HOST.clk","REGFILE.clk"],["EXT_HOST.clk","MASTER.clk"],["EXT_HOST.clk","SLAVE.clk"],
+  ["EXT_HOST.clk","BIST.clk"],["EXT_HOST.clk","LFSR.clk"],["EXT_HOST.clk","MISR.clk"],
+  ["EXT_HOST.rst_n","REGFILE.rst_n"],["EXT_HOST.rst_n","MASTER.rst_n"],["EXT_HOST.rst_n","SLAVE.rst_n"],
+  ["EXT_HOST.rst_n","BIST.rst_n"],["EXT_HOST.rst_n","LFSR.rst_n"],["EXT_HOST.rst_n","MISR.rst_n"],
+  ["EXT_HOST.wr_en","REGFILE.wr_en"],["EXT_HOST.wr_addr","REGFILE.wr_addr"],["EXT_HOST.wr_data","REGFILE.wr_data"],
+  ["EXT_HOST.rd_addr","REGFILE.rd_addr"],["REGFILE.rd_data","EXT_OUT.rd_data"],
+  ["REGFILE.cpol","MASTER.cpol"],["REGFILE.cpol","SLAVE.cpol"],
+  ["REGFILE.cpha","MASTER.cpha"],["REGFILE.cpha","SLAVE.cpha"],
+  ["REGFILE.clk_div","MASTER.clk_div"],
+  ["REGFILE.spi_en_out","MUX1.in"],["MUX1.out","MASTER.spi_en"],
+  ["REGFILE.tx_data","MUX2.in"],["MUX2.out","MASTER.tx_data"],
+  ["BIST.spi_en","MUX1.in"],["BIST.bist_tx","MUX2.in"],
+  ["BIST.bist_tx","SLAVE.tx_data"],
+  ["MASTER.rx_data","REGFILE.rx_data_in"],["MASTER.rx_data","BIST.rx_data"],["MASTER.rx_data","MISR.data_in"],
+  ["MASTER.busy","REGFILE.busy_in"],
+  ["MASTER.done","REGFILE.done_in"],["MASTER.done","BIST.spi_done"],
+  ["REGFILE.bist_en","AND1.in"],["REGFILE.bist_start_out","AND1.in"],["AND1.out","BIST.bist_start"],
+  ["REGFILE.bist_mode","BIST.bist_mode"],["REGFILE.bist_sig_exp","BIST.bist_sig_exp"],
+  ["BIST.err_code","REGFILE.err_code_in"],
+  ["BIST.bist_pass","REGFILE.bist_pass_in"],["BIST.bist_pass","EXT_OUT.bist_pass_pulse"],
+  ["BIST.bist_fail","REGFILE.bist_fail_in"],["BIST.bist_fail","EXT_OUT.bist_fail_pulse"],
+  ["BIST.lfsr_seed_load","LFSR.seed_load"],["BIST.lfsr_en","LFSR.en"],["LFSR.lfsr_data","BIST.lfsr_data"],
+  ["BIST.misr_en","MISR.misr_en"],["BIST.misr_rst","MISR.misr_rst"],["MISR.sig_out","BIST.misr_sig"],["MISR.sig_out","REGFILE.bist_sig_act_in"],
+  ["BIST.loopback_en","MUX.loopback_en"],
+  ["MASTER.sclk","MUX.m_sclk"],["MASTER.mosi","MUX.m_mosi"],["MASTER.ss_n","MUX.m_ss_n"],["MUX.m_miso","MASTER.miso"],
+  ["MUX.ext_sclk","EXT_OUT.spi_sclk"],["MUX.ext_mosi","EXT_OUT.spi_mosi"],["MUX.ext_ss_n","EXT_OUT.spi_ss_n"],["EXT_PADS.spi_miso","MUX.ext_miso"],
+  ["MUX.slv_sclk","SLAVE.sclk_in"],["MUX.slv_mosi","SLAVE.mosi"],["MUX.slv_ss_n","SLAVE.ss_n_in"],["SLAVE.miso","MUX.slv_miso"]
+];
+
+// ============================================================
+// RENDER
+// ============================================================
+const canvas = document.getElementById('canvas');
+let maxX = 0, maxY = 0;
+
+function renderModule(key, mod) {
+  const h = boxHeight(mod);
+  const el = document.createElement('div');
+  el.className = 'mod' + (mod.ext ? ' ext' : '');
+  el.style.left = mod.x + 'px';
+  el.style.top = mod.y + 'px';
+  el.style.width = mod.w + 'px';
+  el.innerHTML = '<div class="hdr">' + mod.title + '</div><div class="body">' +
+    '<div class="col in">' + mod.inputs.map(function(p){
+      return '<div class="pin" id="pin_' + key + '_' + p.id + '"><span class="marker"></span>' + p.n +
+        '<span class="w">' + (p.w!=='1' ? '['+(p.w-1)+':0]' : '') + '</span></div>';
+    }).join('') + '</div>' +
+    '<div class="col out">' + mod.outputs.map(function(p){
+      return '<div class="pin" id="pin_' + key + '_' + p.id + '"><span class="w">' +
+        (p.w!=='1' ? '['+(p.w-1)+':0]' : '') + '</span>' + p.n + '<span class="marker"></span></div>';
+    }).join('') + '</div></div>';
+  canvas.appendChild(el);
+  maxX = Math.max(maxX, mod.x + mod.w + 60);
+  maxY = Math.max(maxY, mod.y + h + 60);
+}
+
+for (const k in modules) renderModule(k, modules[k]);
+
+for (const k in smallNodes) {
+  const n = smallNodes[k];
+  const el = document.createElement('div');
+  el.className = 'node-small';
+  el.id = 'small_' + k;
+  el.style.position = 'absolute';
+  el.style.left = n.x + 'px'; el.style.top = n.y + 'px';
+  el.style.width = n.w + 'px'; el.style.height = n.h + 'px';
+  el.innerHTML = n.label.replace('\n','<br>');
+  canvas.appendChild(el);
+  el.dataset.inX = n.x; el.dataset.inY = n.y + n.h/2;
+  el.dataset.outX = n.x + n.w; el.dataset.outY = n.y + n.h/2;
+}
+
+canvas.style.width = maxX + 'px';
+canvas.style.height = maxY + 'px';
+
+// ============================================================
+// DRAW WIRES (after layout, using actual pixel positions)
+// ============================================================
+const svgNS = "http://www.w3.org/2000/svg";
+const svg = document.createElementNS(svgNS, "svg");
+svg.setAttribute("id", "wires");
+svg.setAttribute("width", maxX);
+svg.setAttribute("height", maxY);
+canvas.appendChild(svg);
+
+const canvasRect = canvas.getBoundingClientRect();
+
+function getAnchor(ref) {
+  const parts = ref.split('.');
+  const mod = parts[0], pin = parts[1];
+  if (smallNodes[mod]) {
+    const el = document.getElementById('small_' + mod);
+    if (pin === 'in') return { x: parseFloat(el.dataset.inX), y: parseFloat(el.dataset.inY) };
+    return { x: parseFloat(el.dataset.outX), y: parseFloat(el.dataset.outY) };
+  }
+  const el = document.getElementById('pin_' + mod + '_' + pin);
+  if (!el) { console.warn('missing pin', ref); return null; }
+  const r = el.getBoundingClientRect();
+  const isInput = el.parentElement.classList.contains('in');
+  const x = isInput ? (r.left - canvasRect.left) : (r.right - canvasRect.left);
+  const y = r.top - canvasRect.top + r.height/2;
+  return { x: x, y: y };
+}
+
+conns.forEach(function(pair) {
+  const a = getAnchor(pair[0]);
+  const b = getAnchor(pair[1]);
+  if (!a || !b) return;
+  const midX = (a.x + b.x) / 2;
+  const path = document.createElementNS(svgNS, "path");
+  const d = "M " + a.x + " " + a.y + " C " + midX + " " + a.y + ", " + midX + " " + b.y + ", " + b.x + " " + b.y;
+  path.setAttribute("d", d);
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "#ef9f27");
+  path.setAttribute("stroke-width", "1");
+  path.setAttribute("opacity", "0.55");
+  svg.appendChild(path);
+});
+</script>
+</body>
+</html>
