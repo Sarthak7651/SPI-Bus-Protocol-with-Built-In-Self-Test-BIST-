@@ -5,14 +5,14 @@ module lfsr
   parameter [DATA_WIDTH-1:0] DEFAULT_SEED=8'h01)
   (//system
    input wire clk,
-   input wire rst_n,
+   input wire rst_n,//active low reset
    //seed control
-   input wire seed_load,
-   input wire [DATA_WIDTH-1:0] seed_in,
+   input wire seed_load,//load a new starting value(control)
+   input wire [DATA_WIDTH-1:0] seed_in,//actual value to load
    //shift control
-   input wire en,
+   input wire en,//generate next or freeze current position
    //output
-   output wire [DATA_WIDTH-1:0] lfsr_data 
+   output wire [DATA_WIDTH-1:0] lfsr_data //current pseudo random value
     );
     
  /*
@@ -28,11 +28,13 @@ module lfsr
         instantiates it at the fixed value of 8.
     */
   //internal reg  
+  //declare a shift register
   reg [DATA_WIDTH-1:0] shift_reg;
+  //always make lfsr data equal to shift reg data
   assign lfsr_data = shift_reg;
   
   //feedback polynomial
-  wire feedback=shift_reg[7] ^ shift_reg[5] ^ shift_reg[4] ^ shift_reg[3];
+  wire feedback = shift_reg[7] ^ shift_reg[5] ^ shift_reg[4] ^ shift_reg[3];
   
   //seed sanitization
   /*
@@ -40,6 +42,7 @@ module lfsr
     feedback LFSR), silently substitute DEFAULT_SEED instead of
     loading the all-zero state.
   */
+  //condition ? value_if_true : value_if_false;
   wire [DATA_WIDTH-1:0] safe_seed = (seed_in == {DATA_WIDTH{1'b0}}) ? DEFAULT_SEED:seed_in;
    
  //main sequential logic
