@@ -5,16 +5,16 @@ module misr
  input wire clk,
  input wire rst_n,
  //control
- input wire misr_rst,
- input wire misr_en,
+ input wire misr_rst,//only reset MISR
+ input wire misr_en,//enable or disbale MISR
  //data
- input wire [DATA_WIDTH-1:0] data_in,
+ input wire [DATA_WIDTH-1:0] data_in,//this is recived SPI data
  //output 
- output wire [DATA_WIDTH-1:0] sig_out
+ output wire [DATA_WIDTH-1:0] sig_out//this is current signature
 );
 
 //internal register
-reg [DATA_WIDTH-1:0] sig_reg;
+reg [DATA_WIDTH-1:0] sig_reg;//store the current signature
 assign sig_out = sig_reg;
 
 //ROTATE LEFT 1 WIRE
@@ -24,6 +24,7 @@ assign sig_out = sig_reg;
     Example (8-bit): sig_reg = 1010_0101
                       rotated = 0100_1011
 */
+//rotate left by 1
 wire [DATA_WIDTH-1:0] rotated = {sig_reg[DATA_WIDTH-2:0],sig_reg[DATA_WIDTH-1]};
 
 //main logic
