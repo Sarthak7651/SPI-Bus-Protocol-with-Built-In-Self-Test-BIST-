@@ -10,7 +10,16 @@ module spi_master #(parameter DATA_WIDTH=8)
   input wire cpha, //clock phase,unused
   input wire [7:0] clk_div, //to establish connection bw clk and sclk,sclk freq=clk/(2*clk_div)
   //data
+  /*Trasmit Data:- What it is: An 8-bit storage buffer.
+  Its Job: When the CPU wants to send a byte (like 8'hA5), it writes it here. tx_data holds onto 
+  this value for the entire duration of the SPI transaction. It does not shift; it just remembers
+  what the CPU asked it to send.*/
   input wire [DATA_WIDTH-1:0] tx_data,//byte to transmit when spi_en=1
+  
+  /*received data:- What it is: An 8-bit storage buffer.
+  Its Job: This holds the final, complete, 8-bit byte that was received from the Slave. It only updates
+   after a full transaction is 100% complete. This ensures that if the CPU reads the register, it gets 
+   a perfectly clean byte, not a half-assembled piece of garbage.*/
   output reg [DATA_WIDTH-1:0] rx_data,//rcvd byte
   //status
   output reg busy,//high while transfer in progress
@@ -38,8 +47,13 @@ reg [3:0] bit_cnt;//Number of bits captured
 //wire sample_on_pos = ~(cpol ^ cpha); //clock mode
 localparam sample_on_pos = 1'b1; //mode0 always sample on rising edge
 //SCLK edge detection (look ahead style)
+//div_cnt limit is (clk_div-1)
 wire sclk_toggle = (state == S_SHIFT) && (div_cnt == clk_div - 8'd1);
+/*(Rising Edge): If the clock is about to flip (sclk_toggle == 1) AND it is currently LOW (~sclk),
+ then it MUST be flipping from 0 to 1.*/
 wire pos_edge = sclk_toggle && (~sclk); //0 -> 1
+/*(Falling Edge): If the clock is about to flip (sclk_toggle == 1) AND it is currently HIGH (sclk),
+ then it MUST be flipping from 1 to 0*/
 wire neg_edge = sclk_toggle && (sclk); //1 -> 0
 
 /*
@@ -80,7 +94,7 @@ if(!rst_n) begin
    rx_data  <= {DATA_WIDTH{1'b0}};
    bit_cnt  <= 4'b0;
    mosi     <= 1'b0;
-   ss_n     <= 1'b1;
+   ss_n     <= 1'b1;//bcz active low signal
    busy     <= 1'b0;
    done     <= 1'b0;
 end else begin
