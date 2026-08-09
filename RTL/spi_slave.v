@@ -28,13 +28,13 @@ reg [DATA_WIDTH-1:0] tx_shift;//msb first
 reg [DATA_WIDTH-1:0] rx_shift;   
 reg [3:0]            bit_cnt;//0 to data_width-1 
 
-//2 FF SYNC for SCLK and SS_N
+//3 FF SYNC for SCLK and SS_N
 /*
   Why synchronize?
     SCLK and SS_N come from a different clock source (the master's
     SCLK divider) or from external pins.  Even on the same FPGA,
     SCLK is asynchronous to posedge clk at the slave's input.
-    Two flip-flops reduce the probability of metastability to an
+    three flip-flops reduce the probability of metastability to an
     acceptable level.
 */
 //SCLK synchronizer
